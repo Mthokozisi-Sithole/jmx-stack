@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: victoriametrics
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: victoriametrics
+  template:
+    metadata:
+      labels:
+        app: victoriametrics
+    spec:
+      containers:
+      - name: victoriametrics
+        image: victoriametrics/victoria-metrics:latest
+        ports:
+        - containerPort: 8428
+        volumeMounts:
+        - name: storage-volume
+          mountPath: /victoria-metrics-data
+        - name: victoriametrics-config
+          mountPath: /etc/victoriametrics
+          readOnly: true
+        resources:
+          limits:
+            cpu: "0.5"
+            memory: 512Mi
+          requests:
+            cpu: "0.2"
+            memory: 256Mi
+
+      volumes:
+      - name: storage-volume
+        emptyDir: {}
+      - name: victoriametrics-config
+        configMap:
+          name: victoriametrics-config
+
+
+---
+
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: victoriametrics-service
+#   namespace: monitoring
+# spec:
+#   selector:
+#     app: victoriametrics
+#   ports:
+#   - protocol: TCP
+#     port: 80
+#     targetPort: 8428
+#   type: LoadBalancer
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoriametrics-nodeport-service
+spec:
+  selector:
+    app: victoriametrics
+  ports:
+  - protocol: TCP
+    port: 8428 # Adjust this to the port VictoriaMetrics is running on
+    targetPort: 8428 # Adjust this to the port VictoriaMetrics is running on
+  type: NodePort
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: victoriametrics-config
+data:
+  victoriametrics.yml: |-
+    # victoriametrics.yml
+
+    # HTTP server configuration for remote write
+    httpListenAddr: ":8428"
+    prometheus:
+      enabled: true
+
+    # Remote write configuration
+    remoteWrite:
+      - url: "http://victoriametrics-nodeport-service:8428/api/v1/write"
+
+    # HTTP server configuration for remote read
+    httpReadListenAddr: ":8429"
+
+    # Storage configuration
+    storage:
+      retentionPeriod: "30d"
+      writeBuffer: 512M
+      cache:
+        maxInMemSize: 256M
+
+    # Enable Prometheus exposition endpoint (optional)
+    promscrape:
+      enable: true
+      listenAddr: ":8425"
+
+    # Set additional settings as needed

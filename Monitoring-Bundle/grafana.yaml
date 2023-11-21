@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secret
+              key: admin-password
+        volumeMounts:
+        - name: grafana-storage-volume
+          mountPath: /var/lib/grafana
+        - name: dashboard-volume
+          mountPath: /etc/grafana/provisioning/dashboards
+
+
+        resources:
+          limits:
+            cpu: "0.5"
+            memory: 512Mi
+
+      volumes:
+      - name: grafana-storage-volume
+        emptyDir: {}
+      - name: dashboard-volume
+        emptyDir: {}
+
+---
+
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: grafana-service
+#   namespace: monitoring
+# spec:
+#   selector:
+#     app: grafana
+#   ports:
+#   - protocol: TCP
+#     port: 80
+#     targetPort: 3000
+#   type: LoadBalancer
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-nodeport-service
+spec:
+  selector:
+    app: grafana
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000 # Assuming Grafana runs on port 3000
+  type: NodePort
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secret
+  namespace: monitoring
+type: Opaque
+data:
+  admin-password: YWRtaW5hZG1pbg==
